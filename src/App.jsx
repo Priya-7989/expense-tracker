@@ -66,7 +66,7 @@ function App() {
                 animate="animate"
                 exit="exit"
               >
-                <PageComponent />
+                <PageComponent onNavigate={setPage} />
               </motion.div>
             </AnimatePresence>
           </div>

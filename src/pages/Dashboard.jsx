@@ -4,9 +4,10 @@ import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell,
 } from 'recharts';
-import { TrendingUp, Wallet, Star, ChevronLeft, ChevronRight, ArrowUpRight } from 'lucide-react';
+import { TrendingUp, Wallet, Star, ChevronLeft, ChevronRight, ArrowUpRight, ScanLine, ReceiptText, TrendingDown } from 'lucide-react';
 import { useExpenses } from '../context/ExpenseContext';
 import { CATEGORIES, MONTHS, getCategoryColor, getCategoryIcon, formatCurrency } from '../utils/constants';
+import { BentoGrid } from '../components/BentoGrid';
 
 /* ─── Animated counter hook ─── */
 function useCountUp(target, duration = 800) {
@@ -36,34 +37,7 @@ const AnimatedAmount = ({ amount }) => {
     return <>{formatCurrency(count)}</>;
 };
 
-/* ─── Stat card ─── */
-const StatCard = ({ label, value, caption, icon: Icon, gradient, delay = 0 }) => (
-    <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-card glass-card-hover"
-        style={{ borderRadius: 20, padding: '22px 24px', cursor: 'default' }}
-    >
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
-                {label}
-            </span>
-            <div style={{
-                width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: gradient,
-            }}>
-                <Icon size={16} color="white" />
-            </div>
-        </div>
-        <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text-primary)', lineHeight: 1 }}>
-            {value}
-        </div>
-        {caption && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>{caption}</div>
-        )}
-    </motion.div>
-);
+/* (StatCard removed — replaced by BentoGrid below) */
 
 /* ─── Custom bar tooltip ─── */
 const BarTooltip = ({ active, payload, label }) => {
@@ -130,7 +104,7 @@ const TxRow = ({ e, index }) => (
 );
 
 /* ─── Main Dashboard ─── */
-export const Dashboard = () => {
+export const Dashboard = ({ onNavigate }) => {
     const { expenses, selectedMonth, selectedYear, setSelectedMonth, setSelectedYear, fetchExpenses, loading } = useExpenses();
     const [activeCategory, setActiveCategory] = useState('All');
 
@@ -199,32 +173,128 @@ export const Dashboard = () => {
                 </div>
             </div>
 
-            {/* ── Stat cards ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                <StatCard
-                    label="Total Spent"
-                    value={<AnimatedAmount amount={totalSpent} />}
-                    icon={Wallet}
-                    gradient="var(--grad-primary)"
-                    delay={0}
-                />
-                <StatCard
-                    label="Daily Average"
-                    value={<AnimatedAmount amount={dailyAvg} />}
-                    icon={TrendingUp}
-                    gradient="var(--grad-green)"
-                    caption={`Over ${daysInMonth} days`}
-                    delay={0.08}
-                />
-                <StatCard
-                    label="Top Category"
-                    value={topCategory ? `${topCategory.icon} ${topCategory.name}` : '—'}
-                    icon={Star}
-                    gradient="linear-gradient(135deg,#fb923c,#ef4444)"
-                    caption={topCategory ? formatCurrency(topCategory.amount) : 'No data yet'}
-                    delay={0.16}
-                />
-            </div>
+            {/* ── Bento Grid Stats ── */}
+            <BentoGrid items={[
+                {
+                    title: 'Total Spending',
+                    meta: MONTHS[selectedMonth - 1],
+                    icon: <Wallet size={18} className="text-[var(--accent)]" />,
+                    status: expenses.length > 0
+                        ? `${expenses.length} txn${expenses.length !== 1 ? 's' : ''}`
+                        : 'No data',
+                    description: (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>
+                                    <AnimatedAmount amount={totalSpent} />
+                                </span>
+                                {dailyAvg > 0 && (
+                                    <span style={{ fontSize: 12, color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <TrendingUp size={12} />
+                                        {formatCurrency(dailyAvg)}/day
+                                    </span>
+                                )}
+                            </div>
+                            {categoryTotals.length > 0 && (
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    {categoryTotals.slice(0, 4).map(c => (
+                                        <span key={c.name} style={{
+                                            fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                                            background: `${c.color}15`, border: `1px solid ${c.color}25`,
+                                            color: c.color, fontWeight: 600,
+                                        }}>
+                                            {c.icon} {formatCurrency(c.amount)}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ),
+                    colSpan: 2,
+                    hasPersistentHover: true,
+                    tags: ['monthly', 'overview'],
+                },
+                {
+                    title: 'Top Category',
+                    icon: topCategory
+                        ? <span style={{ fontSize: 18 }}>{topCategory.icon}</span>
+                        : <Star size={18} className="text-[var(--accent-orange)]" />,
+                    status: topCategory ? formatCurrency(topCategory.amount) : '—',
+                    statusColor: topCategory?.color,
+                    description: topCategory ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <span style={{ fontSize: 20, fontWeight: 800, color: topCategory.color }}>
+                                {topCategory.name}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                {((topCategory.amount / (totalSpent || 1)) * 100).toFixed(1)}% of total spending
+                            </span>
+                        </div>
+                    ) : 'No expenses recorded yet',
+                    tags: ['highest'],
+                    cta: 'View breakdown →',
+                },
+                {
+                    title: 'Receipt Scanner',
+                    icon: <ScanLine size={18} className="text-[var(--accent-2)]" />,
+                    status: 'Quick Add',
+                    description: (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+                            <div style={{
+                                width: 48, height: 48, borderRadius: 14,
+                                background: 'linear-gradient(135deg, rgba(232,121,249,0.12), rgba(124,111,247,0.12))',
+                                border: '1.5px dashed rgba(232,121,249,0.35)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <ReceiptText size={22} style={{ color: 'var(--accent-2)' }} />
+                            </div>
+                            <span style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                                Snap a bill to auto-extract expenses
+                            </span>
+                        </div>
+                    ),
+                    cta: 'Open Scanner →',
+                    onClick: () => onNavigate?.('scanner'),
+                    tags: ['OCR'],
+                },
+                {
+                    title: 'Recent Activity',
+                    icon: <ReceiptText size={18} className="text-[var(--accent-green)]" />,
+                    status: `${daysInMonth} days`,
+                    description: (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    Daily Average
+                                </span>
+                                <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-green)' }}>
+                                    <AnimatedAmount amount={dailyAvg} />
+                                </span>
+                            </div>
+                            {sortedFiltered.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {sortedFiltered.slice(0, 3).map(e => (
+                                        <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                                            <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                                                {getCategoryIcon(e.category)} {e.particulars}
+                                            </span>
+                                            <span style={{ fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
+                                                {formatCurrency(e.amount)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                    No recent transactions
+                                </span>
+                            )}
+                        </div>
+                    ),
+                    tags: ['summary'],
+                    cta: `${sortedFiltered.length} total →`,
+                },
+            ]} />
 
             {/* ── Category filters ── */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
