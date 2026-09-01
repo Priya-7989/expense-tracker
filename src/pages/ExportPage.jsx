@@ -1,87 +1,67 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import * as XLSX from 'xlsx';
-import { FileDown, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { FileDown, Download, AlertCircle, BarChart2 } from 'lucide-react';
 import { getAllExpenses } from '../db/database';
 import { MONTHS, getCategoryIcon, formatCurrency } from '../utils/constants';
 
 export const ExportPage = () => {
     const [expenses, setExpenses] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
-    const [done, setDone] = useState(false);
 
     useEffect(() => {
-        setLoading(true);
-        getAllExpenses().then((data) => {
-            setExpenses(data);
-            setLoading(false);
-        });
+        getAllExpenses().then(data => { setExpenses(data); setLoading(false); });
     }, []);
 
     const handleExport = async () => {
-        if (expenses.length === 0) return;
+        if (!expenses.length) return;
         setExporting(true);
         try {
-            // Summary sheet
             const categoryMap = {};
-            expenses.forEach((e) => {
-                categoryMap[e.category] = (categoryMap[e.category] || 0) + e.amount;
-            });
+            expenses.forEach(e => { categoryMap[e.category] = (categoryMap[e.category] || 0) + e.amount; });
 
-            const summaryData = Object.entries(categoryMap).map(([cat, amt]) => ({
-                Category: `${getCategoryIcon(cat)} ${cat}`,
-                'Total Amount (₹)': amt,
+            const summaryRows = Object.entries(categoryMap).map(([cat, amt]) => ({
+                'Category': `${getCategoryIcon(cat)} ${cat}`, 'Total Amount (₹)': amt,
             }));
+            summaryRows.push({ 'Category': 'TOTAL', 'Total Amount (₹)': expenses.reduce((s, e) => s + e.amount, 0) });
 
-            const totalRow = { Category: 'TOTAL', 'Total Amount (₹)': expenses.reduce((s, e) => s + e.amount, 0) };
-
-            // Expense rows
-            const expenseRows = expenses.map((e) => ({
-                'Date': e.date,
-                'Particulars': e.particulars,
+            const expenseRows = expenses.map(e => ({
+                'Date': e.date, 'Particulars': e.particulars,
                 'Category': `${getCategoryIcon(e.category)} ${e.category}`,
-                'Amount (₹)': e.amount,
-                'Payment Method': e.paymentMethod,
+                'Amount (₹)': e.amount, 'Payment Method': e.paymentMethod,
             }));
 
-            const wb = XLSX.utils.book_new();
-
-            // All Expenses sheet
-            const ws1 = XLSX.utils.json_to_sheet(expenseRows);
-            ws1['!cols'] = [{ wch: 12 }, { wch: 35 }, { wch: 16 }, { wch: 14 }, { wch: 18 }];
-            XLSX.utils.book_append_sheet(wb, ws1, 'All Expenses');
-
-            // Summary sheet
-            const ws2 = XLSX.utils.json_to_sheet([...summaryData, totalRow]);
-            ws2['!cols'] = [{ wch: 20 }, { wch: 20 }];
-            XLSX.utils.book_append_sheet(wb, ws2, 'Summary by Category');
-
-            // Monthly breakdown
             const monthlyMap = {};
-            expenses.forEach((e) => {
+            expenses.forEach(e => {
                 const [year, month] = e.date.split('-');
                 const key = `${MONTHS[parseInt(month, 10) - 1]} ${year}`;
                 monthlyMap[key] = (monthlyMap[key] || 0) + e.amount;
             });
-            const monthlyRows = Object.entries(monthlyMap)
-                .sort()
-                .map(([period, amt]) => ({ Month: period, 'Total Amount (₹)': amt }));
+            const monthlyRows = Object.entries(monthlyMap).sort().map(([period, amt]) => ({ Month: period, 'Total Amount (₹)': amt }));
+
+            const wb = XLSX.utils.book_new();
+            const ws1 = XLSX.utils.json_to_sheet(expenseRows);
+            ws1['!cols'] = [{ wch: 12 }, { wch: 35 }, { wch: 16 }, { wch: 14 }, { wch: 18 }];
+            XLSX.utils.book_append_sheet(wb, ws1, 'All Expenses');
+            const ws2 = XLSX.utils.json_to_sheet(summaryRows);
+            ws2['!cols'] = [{ wch: 20 }, { wch: 20 }];
+            XLSX.utils.book_append_sheet(wb, ws2, 'Summary by Category');
             const ws3 = XLSX.utils.json_to_sheet(monthlyRows);
             ws3['!cols'] = [{ wch: 20 }, { wch: 20 }];
             XLSX.utils.book_append_sheet(wb, ws3, 'Monthly Summary');
 
-            const now = new Date().toISOString().split('T')[0];
-            XLSX.writeFile(wb, `household-expenses-${now}.xlsx`);
-            setDone(true);
-            setTimeout(() => setDone(false), 3000);
+            const fileName = `household-expenses-${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            toast.success('Excel downloaded!', { icon: '📊', description: `${expenses.length} expenses exported` });
         } finally {
             setExporting(false);
         }
     };
 
-    // Group expenses by month for preview
     const grouped = {};
-    expenses.forEach((e) => {
+    expenses.forEach(e => {
         const [year, month] = e.date.split('-');
         const key = `${MONTHS[parseInt(month, 10) - 1]} ${year}`;
         if (!grouped[key]) grouped[key] = { total: 0, count: 0 };
@@ -89,88 +69,100 @@ export const ExportPage = () => {
         grouped[key].count += 1;
     });
     const sortedGroups = Object.entries(grouped).sort(([a], [b]) => b.localeCompare(a));
+    const grandTotal = expenses.reduce((s, e) => s + e.amount, 0);
 
     return (
-        <div className="max-w-xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Export to Excel</h1>
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Download all expenses as a structured .xlsx file</p>
-            </div>
+        <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>
+                    Export Data
+                </h1>
+                <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
+                    Download all your expenses as a structured Excel spreadsheet
+                </p>
+            </motion.div>
 
             {/* Export card */}
-            <div className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                        style={{ background: 'linear-gradient(135deg, rgba(108,99,255,0.2), rgba(240,147,251,0.1))' }}>
-                        <FileDown size={24} style={{ color: 'var(--accent-primary)' }} />
-                    </div>
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                className="glass-card" style={{ borderRadius: 24, padding: '28px 28px 24px' }}>
+
+                {/* Icon + info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 24 }}>
+                    <motion.div
+                        animate={exporting ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] } : {}}
+                        transition={{ duration: 0.6, repeat: Infinity }}
+                        style={{ width: 56, height: 56, borderRadius: 18, background: 'var(--grad-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <FileDown size={24} color="white" />
+                    </motion.div>
                     <div>
-                        <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>household-expenses.xlsx</p>
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                            {expenses.length} expense{expenses.length !== 1 ? 's' : ''} across {sortedGroups.length} month{sortedGroups.length !== 1 ? 's' : ''}
-                        </p>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>household-expenses.xlsx</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
+                            {loading ? 'Loading…' : `${expenses.length} expense${expenses.length !== 1 ? 's' : ''} · ${sortedGroups.length} month${sortedGroups.length !== 1 ? 's' : ''} · ${formatCurrency(grandTotal)} total`}
+                        </div>
                     </div>
                 </div>
 
-                <div className="rounded-xl p-4 space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
-                    <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-secondary)' }}>
-                        What's included:
-                    </p>
-                    {['📋  All Expenses — full list with date, description, category, amount, payment method',
-                        '📊  Summary by Category — totals per category',
-                        '📅  Monthly Summary — month-by-month spend overview'].map((item) => (
-                            <p key={item} className="text-xs" style={{ color: 'var(--text-secondary)' }}>{item}</p>
-                        ))}
+                {/* What's included */}
+                <div style={{ borderRadius: 14, padding: '14px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.7px', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                        Sheets included
+                    </div>
+                    {[
+                        ['📋', 'All Expenses', 'Full list with date, category, amount, payment method'],
+                        ['📊', 'Summary by Category', 'Totals per category with grand total'],
+                        ['📅', 'Monthly Summary', 'Month-by-month spend breakdown'],
+                    ].map(([icon, title, desc]) => (
+                        <div key={title} style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                            <span style={{ fontSize: 15 }}>{icon}</span>
+                            <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{desc}</div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
-                <button
+                <motion.button
+                    whileTap={{ scale: 0.97 }}
                     onClick={handleExport}
-                    disabled={exporting || expenses.length === 0}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200"
-                    style={{
-                        background: done
-                            ? 'linear-gradient(135deg, #43e97b, #38f9d7)'
-                            : expenses.length === 0
-                                ? 'var(--border)'
-                                : 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))',
-                        color: expenses.length === 0 ? 'var(--text-secondary)' : 'white',
-                        cursor: expenses.length === 0 ? 'not-allowed' : 'pointer',
-                    }}
+                    disabled={exporting || !expenses.length}
+                    className="btn-primary"
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, opacity: !expenses.length ? 0.4 : 1, cursor: !expenses.length ? 'not-allowed' : 'pointer' }}
                 >
-                    {done ? <><CheckCircle size={16} /> Downloaded!</>
-                        : exporting ? <><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Exporting…</>
-                            : <><Download size={16} /> Export to Excel</>}
-                </button>
+                    {exporting
+                        ? <><div style={{ width: 15, height: 15, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', animation: 'spin 0.7s linear infinite' }} /> Exporting…</>
+                        : <><Download size={16} /> Export to Excel</>
+                    }
+                </motion.button>
 
-                {expenses.length === 0 && !loading && (
-                    <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        <AlertCircle size={14} />
-                        Add some expenses first before exporting.
+                {!expenses.length && !loading && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <AlertCircle size={13} /> Add some expenses first to enable export.
                     </div>
                 )}
-            </div>
+            </motion.div>
 
-            {/* Monthly breakdown preview */}
+            {/* Monthly preview */}
             {sortedGroups.length > 0 && (
-                <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                    <div className="px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
-                        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Monthly Preview</h2>
+                <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
+                    className="glass-card" style={{ borderRadius: 20, overflow: 'hidden' }}>
+                    <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BarChart2 size={15} color="var(--accent)" />
+                        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Monthly Preview</h2>
                     </div>
-                    <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                        {sortedGroups.map(([period, { total, count }]) => (
-                            <div key={period} className="flex items-center justify-between px-5 py-3">
-                                <div>
-                                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{period}</span>
-                                    <span className="text-xs ml-2" style={{ color: 'var(--text-secondary)' }}>{count} entries</span>
-                                </div>
-                                <span className="text-sm font-semibold" style={{ color: 'var(--accent-primary)' }}>
-                                    {formatCurrency(total)}
-                                </span>
+                    {sortedGroups.map(([period, { total, count }]) => (
+                        <div key={period} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
+                            <div>
+                                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{period}</span>
+                                <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>{count} entries</span>
                             </div>
-                        ))}
-                    </div>
-                </div>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{formatCurrency(total)}</span>
+                        </div>
+                    ))}
+                </motion.div>
             )}
+
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
     );
 };

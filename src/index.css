@@ -1,41 +1,196 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 @layer base {
   :root {
-    --bg-primary: #0f0f1a;
-    --bg-secondary: #1a1a2e;
-    --bg-card: #16213e;
-    --accent-primary: #6c63ff;
-    --accent-secondary: #f093fb;
-    --accent-green: #43e97b;
-    --accent-orange: #fa7c58;
-    --text-primary: #e2e8f0;
-    --text-secondary: #94a3b8;
-    --border: #2d3748;
+    /* Core surfaces */
+    --bg-base: #080810;
+    --bg-elevated: #0e0e1c;
+    --bg-card: #12121f;
+    --bg-card-hover: #17172a;
+    --glass: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-hover: rgba(255, 255, 255, 0.07);
+
+    /* Accents */
+    --accent: #7c6ff7;
+    --accent-2: #e879f9;
+    --accent-green: #34d399;
+    --accent-orange: #fb923c;
+    --accent-red: #f87171;
+    --accent-blue: #60a5fa;
+
+    /* Gradients */
+    --grad-primary: linear-gradient(135deg, #7c6ff7 0%, #e879f9 100%);
+    --grad-green: linear-gradient(135deg, #34d399 0%, #059669 100%);
+    --grad-warm: linear-gradient(135deg, #fb923c 0%, #ef4444 100%);
+
+    /* Text */
+    --text-primary: #f1f5f9;
+    --text-secondary: #64748b;
+    --text-muted: #334155;
+
+    /* Borders & rings */
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --ring: rgba(124, 111, 247, 0.4);
   }
 
-  * {
+  *,
+  *::before,
+  *::after {
     box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
   }
 
   body {
     margin: 0;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-base);
     color: var(--text-primary);
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
   }
 
+  /* Scrollbar */
   ::-webkit-scrollbar {
-    width: 6px;
+    width: 4px;
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--accent-primary);
-    border-radius: 3px;
+    background: rgba(124, 111, 247, 0.4);
+    border-radius: 2px;
   }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+  }
+
+  ::selection {
+    background: rgba(124, 111, 247, 0.3);
+    color: #fff;
+  }
+}
+
+/* ── Reusable glass card ── */
+.glass-card {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-card-hover:hover {
+  background: var(--glass-hover);
+  border-color: var(--border-strong);
+}
+
+/* ── Inputs ── */
+.premium-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 11px 15px;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.premium-input:focus {
+  border-color: var(--accent);
+  background: rgba(124, 111, 247, 0.07);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.premium-input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* ── Gradient button ── */
+.btn-primary {
+  background: var(--grad-primary);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.12) 50%, transparent 100%);
+  transform: translateX(-100%);
+  transition: transform 0.5s;
+}
+
+.btn-primary:hover::before {
+  transform: translateX(100%);
+}
+
+/* ── Dashed drop zone animation ── */
+@keyframes dashSpin {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* ── Glow pulse ── */
+@keyframes glowPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 111, 247, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(124, 111, 247, 0);
+  }
+}
+
+.glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* ── Shimmer for loading ── */
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, var(--glass) 0%, rgba(255, 255, 255, 0.08) 50%, var(--glass) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.8s infinite;
 }

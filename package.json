@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "dexie": "^4.4.5",
+    "framer-motion": "^13.1.1",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^3.10.1",
+    "sonner": "^2.0.8",
     "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },

@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard, PlusCircle, ScanLine, FileDown, X, Menu, IndianRupee,
 } from 'lucide-react';
 
-const navItems = [
+const NAV = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'add', label: 'Add Expense', icon: PlusCircle },
     { id: 'scanner', label: 'Bill Scanner', icon: ScanLine },
@@ -13,74 +14,132 @@ const navItems = [
 export const Sidebar = ({ currentPage, onNavigate }) => {
     const [open, setOpen] = useState(false);
 
+    const SidebarContent = () => (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Logo */}
+            <div style={{ padding: '28px 20px 32px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                    className="glow-pulse"
+                    style={{
+                        width: 42, height: 42, borderRadius: 14, flexShrink: 0,
+                        background: 'var(--grad-primary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 0 0 0 rgba(124,111,247,0.4)',
+                    }}
+                >
+                    <IndianRupee size={20} color="white" />
+                </div>
+                <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.3px', color: 'var(--text-primary)' }}>
+                        Expense
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--accent)', letterSpacing: '0.5px' }}>
+                        TRACKER
+                    </div>
+                </div>
+            </div>
+
+            {/* Nav */}
+            <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {NAV.map(({ id, label, icon: Icon }) => {
+                    const active = currentPage === id;
+                    return (
+                        <div key={id} style={{ position: 'relative' }}>
+                            {active && (
+                                <motion.div
+                                    layoutId="activeNav"
+                                    style={{
+                                        position: 'absolute', inset: 0, borderRadius: 12,
+                                        background: 'rgba(124,111,247,0.15)',
+                                        border: '1px solid rgba(124,111,247,0.25)',
+                                    }}
+                                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                />
+                            )}
+                            <button
+                                onClick={() => { onNavigate(id); setOpen(false); }}
+                                style={{
+                                    position: 'relative', zIndex: 1,
+                                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                                    padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                                    background: 'transparent',
+                                    color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                                    fontSize: 14, fontWeight: active ? 600 : 500,
+                                    fontFamily: 'inherit',
+                                    transition: 'color 0.2s',
+                                }}
+                            >
+                                <Icon size={17} />
+                                {label}
+                            </button>
+                        </div>
+                    );
+                })}
+            </nav>
+
+            {/* Footer */}
+            <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+                <div style={{
+                    fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center',
+                    display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                    <span style={{ color: 'var(--accent-green)', fontWeight: 600 }}>● 100% local</span>
+                    <span>Your data never leaves this device</span>
+                </div>
+            </div>
+        </div>
+    );
+
     return (
         <>
             {/* Mobile toggle */}
             <button
-                className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-xl"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
                 onClick={() => setOpen(!open)}
-            >
-                {open ? <X size={20} /> : <Menu size={20} />}
-            </button>
-
-            {/* Overlay */}
-            {open && (
-                <div
-                    className="fixed inset-0 z-40 md:hidden"
-                    style={{ background: 'rgba(0,0,0,0.5)' }}
-                    onClick={() => setOpen(false)}
-                />
-            )}
-
-            {/* Sidebar */}
-            <aside
-                className={`fixed left-0 top-0 h-full z-40 flex flex-col transition-transform duration-300
-          ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
                 style={{
-                    width: '240px',
-                    background: 'var(--bg-secondary)',
-                    borderRight: '1px solid var(--border)',
+                    display: 'none', position: 'fixed', top: 16, left: 16, zIndex: 60,
+                    width: 40, height: 40, borderRadius: 12,
+                    background: 'var(--bg-card)', border: '1px solid var(--glass-border)',
+                    cursor: 'pointer', color: 'var(--text-primary)',
+                    alignItems: 'center', justifyContent: 'center',
+                }}
+                className="mobile-toggle"
+            >
+                {open ? <X size={18} /> : <Menu size={18} />}
+            </button>
+            <style>{`@media(max-width:768px){.mobile-toggle{display:flex!important}}`}</style>
+
+            {/* Mobile overlay */}
+            <AnimatePresence>
+                {open && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        onClick={() => setOpen(false)}
+                        style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* Sidebar panel */}
+            <aside
+                className="mobile-sidebar"
+                style={{
+                    position: 'fixed', left: 0, top: 0, height: '100%', zIndex: 50,
+                    width: 260,
+                    background: 'rgba(12,12,22,0.85)',
+                    backdropFilter: 'blur(24px)',
+                    WebkitBackdropFilter: 'blur(24px)',
+                    borderRight: '1px solid var(--glass-border)',
                 }}
             >
-                {/* Logo */}
-                <div className="flex items-center gap-3 p-6 pb-8">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                        style={{ background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))' }}>
-                        <IndianRupee size={20} color="white" />
-                    </div>
-                    <div>
-                        <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Expense</div>
-                        <div className="font-bold text-sm" style={{ color: 'var(--accent-primary)' }}>Tracker</div>
-                    </div>
-                </div>
-
-                {/* Nav items */}
-                <nav className="flex-1 px-3 space-y-1">
-                    {navItems.map(({ id, label, icon: Icon }) => {
-                        const active = currentPage === id;
-                        return (
-                            <button
-                                key={id}
-                                onClick={() => { onNavigate(id); setOpen(false); }}
-                                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200"
-                                style={{
-                                    background: active
-                                        ? 'linear-gradient(135deg, rgba(108,99,255,0.2), rgba(240,147,251,0.1))'
-                                        : 'transparent',
-                                    color: active ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                                    border: active ? '1px solid rgba(108,99,255,0.3)' : '1px solid transparent',
-                                }}
-                            >
-                                <Icon size={18} />
-                                {label}
-                            </button>
-                        );
-                    })}
-                </nav>
-
-                <div className="p-4 text-xs text-center" style={{ color: 'var(--text-secondary)' }}>
-                    100% local · Data stays on your device
+                <style>{`
+          @media(max-width:768px){
+            .mobile-sidebar { transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.22,1,0.36,1); }
+            .mobile-sidebar.open { transform: translateX(0); }
+          }
+          @media(min-width:769px){ .mobile-sidebar { transform: translateX(0) !important; } }
+        `}</style>
+                <div className={`mobile-sidebar ${open ? 'open' : ''}`} style={{ height: '100%' }}>
+                    <SidebarContent />
                 </div>
             </aside>
         </>

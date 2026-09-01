@@ -1,13 +1,14 @@
 import { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createWorker } from 'tesseract.js';
-import { ScanLine, Upload, X, CheckCircle, Camera, FileText } from 'lucide-react';
+import { toast } from 'sonner';
+import { ScanLine, Upload, X, CheckCircle, FileText, ZapIcon } from 'lucide-react';
 import { useExpenses } from '../context/ExpenseContext';
 import { CATEGORIES, PAYMENT_METHODS } from '../utils/constants';
 
 const today = new Date().toISOString().split('T')[0];
 
 const extractFromOCR = (text) => {
-    // Try to extract amount
     const amountPatterns = [
         /(?:total|amount|amt|rs\.?|₹|inr)\s*[:\-]?\s*(\d+(?:[.,]\d{1,2})?)/i,
         /(\d{3,}(?:[.,]\d{1,2})?)\s*(?:rs\.?|₹|inr)/i,
@@ -19,139 +20,123 @@ const extractFromOCR = (text) => {
         const m = text.match(pat);
         if (m) { amount = m[1].replace(',', ''); break; }
     }
-
-    // Try to extract date
     const datePatterns = [
         /(\d{2})[\/\-](\d{2})[\/\-](\d{4})/,
         /(\d{4})[\/\-](\d{2})[\/\-](\d{2})/,
-        /(\d{1,2})\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})/i,
     ];
     let date = today;
     for (const pat of datePatterns) {
         const m = text.match(pat);
         if (m) {
-            try {
-                const d = new Date(m[0]);
-                if (!isNaN(d)) { date = d.toISOString().split('T')[0]; break; }
-            } catch (e) { /* ignore */ }
+            try { const d = new Date(m[0]); if (!isNaN(d)) { date = d.toISOString().split('T')[0]; break; } } catch { }
         }
     }
-
     return { amount, date };
 };
 
+/* ─── Confirm Modal ─── */
 const ConfirmModal = ({ imageUrl, ocrData, onConfirm, onCancel }) => {
     const [form, setForm] = useState({
         date: ocrData.date || today,
-        particulars: ocrData.particulars || 'Scanned Bill',
+        particulars: 'Scanned Bill',
         category: 'Misc',
         amount: ocrData.amount || '',
         paymentMethod: 'Cash',
     });
-
-    const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-    const inputStyle = {
-        background: 'var(--bg-primary)',
-        border: '1px solid var(--border)',
-        color: 'var(--text-primary)',
-        borderRadius: '10px',
-        padding: '10px 14px',
-        width: '100%',
-        fontSize: '14px',
-        outline: 'none',
-    };
+    const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
-            <div className="w-full max-w-lg rounded-2xl overflow-hidden"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
-                    <div className="flex items-center gap-2">
-                        <CheckCircle size={18} style={{ color: 'var(--accent-green)' }} />
-                        <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Confirm Scanned Data</span>
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+                position: 'fixed', inset: 0, zIndex: 100,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+                background: 'rgba(0,0,0,0.75)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+            }}
+        >
+            <motion.div
+                initial={{ opacity: 0, scale: 0.94, y: 24 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                className="glass-card"
+                style={{ width: '100%', maxWidth: 480, borderRadius: 24, overflow: 'hidden' }}
+            >
+                {/* Modal header */}
+                <div style={{
+                    padding: '18px 22px', borderBottom: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(52,211,153,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <CheckCircle size={15} color="var(--accent-green)" />
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Review Scanned Data</span>
                     </div>
-                    <button onClick={onCancel} className="p-1 rounded-lg hover:bg-white/5">
-                        <X size={18} style={{ color: 'var(--text-secondary)' }} />
+                    <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4, borderRadius: 8, display: 'flex' }}>
+                        <X size={18} />
                     </button>
                 </div>
 
-                <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-                    {/* Image preview */}
+                <div style={{ padding: '20px 22px', maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {/* Preview */}
                     {imageUrl && (
-                        <img src={imageUrl} alt="Scanned bill" className="w-full max-h-40 object-contain rounded-xl"
-                            style={{ border: '1px solid var(--border)' }} />
+                        <img src={imageUrl} alt="Bill" style={{ width: '100%', maxHeight: 130, objectFit: 'contain', borderRadius: 14, border: '1px solid var(--border)' }} />
                     )}
-
-                    {/* OCR raw text hint */}
-                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        Review and adjust the extracted details before saving.
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
+                        OCR extracted the data below. Review and adjust before saving.
                     </p>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--text-secondary)' }}>Date</label>
-                            <input type="date" name="date" value={form.date} onChange={handleChange} style={inputStyle} />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--text-secondary)' }}>Amount (₹)</label>
-                            <input type="number" name="amount" value={form.amount} onChange={handleChange} placeholder="0.00" style={inputStyle} />
-                        </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.7px' }}>Date</label>
+                            <input type="date" name="date" value={form.date} onChange={handleChange} className="premium-input" style={{ marginTop: 6 }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.7px' }}>Amount (₹)</label>
+                            <input type="number" name="amount" value={form.amount} onChange={handleChange} placeholder="0.00" className="premium-input" style={{ marginTop: 6 }} /></div>
                     </div>
 
-                    <div className="space-y-1">
-                        <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--text-secondary)' }}>Description</label>
-                        <input type="text" name="particulars" value={form.particulars} onChange={handleChange} style={inputStyle} />
+                    <div><label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.7px' }}>Description</label>
+                        <input type="text" name="particulars" value={form.particulars} onChange={handleChange} className="premium-input" style={{ marginTop: 6 }} /></div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.7px' }}>Category</label>
+                            <select name="category" value={form.category} onChange={handleChange} className="premium-input" style={{ marginTop: 6 }}>
+                                {CATEGORIES.map(c => <option key={c.label} value={c.label}>{c.icon} {c.label}</option>)}
+                            </select></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.7px' }}>Payment</label>
+                            <select name="paymentMethod" value={form.paymentMethod} onChange={handleChange} className="premium-input" style={{ marginTop: 6 }}>
+                                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select></div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--text-secondary)' }}>Category</label>
-                            <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
-                                {CATEGORIES.map((c) => <option key={c.label} value={c.label}>{c.icon} {c.label}</option>)}
-                            </select>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--text-secondary)' }}>Payment Method</label>
-                            <select name="paymentMethod" value={form.paymentMethod} onChange={handleChange} style={inputStyle}>
-                                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                        <button
-                            onClick={() => onConfirm(form)}
-                            className="flex-1 py-3 rounded-xl text-sm font-semibold"
-                            style={{ background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', color: 'white' }}
+                    <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+                        <motion.button
+                            whileTap={{ scale: 0.97 }} onClick={() => onConfirm(form)}
+                            className="btn-primary"
+                            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                         >
-                            Save Expense
-                        </button>
-                        <button
-                            onClick={onCancel}
-                            className="px-6 py-3 rounded-xl text-sm font-medium"
-                            style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
-                        >
+                            <CheckCircle size={15} /> Save Expense
+                        </motion.button>
+                        <button onClick={onCancel}
+                            style={{ padding: '12px 18px', borderRadius: 12, border: '1px solid var(--glass-border)', background: 'var(--glass)', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>
                             Cancel
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     );
 };
 
+/* ─── Main Bill Scanner ─── */
 export const BillScanner = () => {
     const { addNewExpense } = useExpenses();
     const fileRef = useRef(null);
-    const [status, setStatus] = useState('idle'); // idle | scanning | done | error
+    const [status, setStatus] = useState('idle');
     const [progress, setProgress] = useState(0);
     const [imageUrl, setImageUrl] = useState(null);
     const [modal, setModal] = useState(null);
-    const [savedMsg, setSavedMsg] = useState(false);
-    const [rawText, setRawText] = useState('');
 
     const processFile = async (file) => {
         if (!file || !file.type.startsWith('image/')) return;
@@ -159,159 +144,152 @@ export const BillScanner = () => {
         setImageUrl(url);
         setStatus('scanning');
         setProgress(0);
-
         try {
             const worker = await createWorker('eng', 1, {
-                logger: (m) => {
-                    if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 100));
-                },
+                logger: m => { if (m.status === 'recognizing text') setProgress(Math.round(m.progress * 100)); },
             });
             const { data } = await worker.recognize(file);
             await worker.terminate();
-            const text = data.text;
-            setRawText(text);
-            const extracted = extractFromOCR(text);
-            setModal({ ...extracted, imageUrl: url });
+            setModal({ ...extractFromOCR(data.text), imageUrl: url });
             setStatus('done');
-        } catch (err) {
-            console.error(err);
+        } catch {
             setStatus('error');
         }
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files?.[0];
-        if (file) processFile(file);
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file) processFile(file);
     };
 
     const handleConfirm = async (formData) => {
         await addNewExpense(formData);
         setModal(null);
-        setSavedMsg(true);
         setStatus('idle');
         setImageUrl(null);
-        setRawText('');
-        setTimeout(() => setSavedMsg(false), 3000);
+        if (fileRef.current) fileRef.current.value = '';
+        toast.success('Receipt saved!', { icon: '🧾', description: `₹${parseFloat(formData.amount).toLocaleString('en-IN')} · ${formData.category}` });
     };
 
-    const reset = () => {
-        setStatus('idle');
-        setImageUrl(null);
-        setRawText('');
-        setModal(null);
-        if (fileRef.current) fileRef.current.value = '';
-    };
+    const reset = () => { setStatus('idle'); setImageUrl(null); setModal(null); if (fileRef.current) fileRef.current.value = ''; };
+
+    const isDragging = status === 'idle';
 
     return (
-        <div className="max-w-xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Bill Scanner</h1>
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Scan a bill or receipt to auto-extract expense details</p>
-            </div>
-
-            {savedMsg && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium"
-                    style={{ background: 'rgba(67,233,123,0.1)', border: '1px solid rgba(67,233,123,0.3)', color: '#43e97b' }}>
-                    <CheckCircle size={16} /> Expense saved successfully!
-                </div>
-            )}
+        <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>
+                    Bill Scanner
+                </h1>
+                <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-secondary)' }}>
+                    Scan a receipt to auto-extract expense details with offline OCR
+                </p>
+            </motion.div>
 
             {/* Drop zone */}
-            <div
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
+            <motion.div
+                initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                onDrop={e => { e.preventDefault(); processFile(e.dataTransfer.files[0]); }}
+                onDragOver={e => e.preventDefault()}
                 onClick={() => status === 'idle' && fileRef.current?.click()}
-                className="rounded-2xl flex flex-col items-center justify-center gap-4 transition-all duration-200 cursor-pointer"
+                className="glass-card"
                 style={{
-                    border: '2px dashed var(--border)',
-                    borderColor: status === 'scanning' ? 'var(--accent-primary)' : 'var(--border)',
-                    background: 'var(--bg-card)',
+                    borderRadius: 24, minHeight: 240,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                    cursor: status === 'idle' ? 'pointer' : 'default',
                     padding: '48px 24px',
-                    minHeight: '220px',
+                    borderStyle: 'dashed',
+                    borderColor: status === 'scanning' ? 'var(--accent)' : 'var(--glass-border)',
+                    transition: 'border-color 0.3s',
+                    position: 'relative', overflow: 'hidden',
                 }}
             >
+                {/* Subtle gradient glow when scanning */}
+                {status === 'scanning' && (
+                    <motion.div
+                        animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 2, repeat: Infinity }}
+                        style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(124,111,247,0.12) 0%, transparent 70%)', pointerEvents: 'none' }}
+                    />
+                )}
+
                 {status === 'idle' && (
                     <>
-                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                            style={{ background: 'linear-gradient(135deg, rgba(108,99,255,0.2), rgba(240,147,251,0.1))' }}>
-                            <ScanLine size={28} style={{ color: 'var(--accent-primary)' }} />
+                        <motion.div
+                            whileHover={{ scale: 1.05 }} transition={{ type: 'spring', stiffness: 300 }}
+                            style={{ width: 68, height: 68, borderRadius: 20, background: 'var(--grad-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ScanLine size={30} color="white" />
+                        </motion.div>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 6 }}>
+                                Drop a bill image here
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>or click to upload JPG, PNG, WEBP</div>
                         </div>
-                        <div className="text-center">
-                            <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Drop a bill image here</p>
-                            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>or click to upload JPG, PNG, WEBP</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
-                                style={{ background: 'var(--accent-primary)', color: 'white' }}
-                            >
-                                <Upload size={14} /> Upload Image
-                            </button>
-                        </div>
+                        <motion.button
+                            whileTap={{ scale: 0.96 }} onClick={e => { e.stopPropagation(); fileRef.current?.click(); }}
+                            className="btn-primary"
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', fontSize: 13 }}
+                        >
+                            <Upload size={14} /> Choose Image
+                        </motion.button>
                     </>
                 )}
 
                 {status === 'scanning' && (
-                    <>
-                        <div className="w-16 h-16 rounded-full border-4 border-t-transparent animate-spin"
-                            style={{ borderColor: 'var(--accent-primary)', borderTopColor: 'transparent' }} />
-                        <div className="text-center">
-                            <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Scanning with OCR…</p>
-                            <p className="text-sm mt-1" style={{ color: 'var(--accent-primary)' }}>{progress}%</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, width: '100%', maxWidth: 300 }}>
+                        <motion.div
+                            animate={{ rotate: 360 }} transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                            style={{ width: 56, height: 56, borderRadius: '50%', border: '3px solid rgba(124,111,247,0.2)', borderTopColor: 'var(--accent)' }}
+                        />
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Scanning with OCR…</div>
+                            <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>{progress}% complete</div>
                         </div>
-                        {/* Progress bar */}
-                        <div className="w-full max-w-xs rounded-full h-1.5 overflow-hidden" style={{ background: 'var(--border)' }}>
-                            <div className="h-full rounded-full transition-all duration-300"
-                                style={{ width: `${progress}%`, background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))' }} />
+                        {/* Framer Motion progress bar */}
+                        <div style={{ width: '100%', height: 4, borderRadius: 99, background: 'var(--glass-border)', overflow: 'hidden' }}>
+                            <motion.div
+                                animate={{ width: `${progress}%` }}
+                                transition={{ type: 'spring', stiffness: 80, damping: 20 }}
+                                style={{ height: '100%', background: 'var(--grad-primary)', borderRadius: 99 }}
+                            />
                         </div>
-                    </>
+                    </div>
                 )}
 
                 {(status === 'done' || status === 'error') && imageUrl && (
-                    <div className="flex flex-col items-center gap-3">
-                        <img src={imageUrl} alt="Scanned" className="max-h-32 object-contain rounded-xl" />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                        <img src={imageUrl} alt="Scanned" style={{ maxHeight: 120, objectFit: 'contain', borderRadius: 14 }} />
                         {status === 'error' && (
-                            <p className="text-sm" style={{ color: '#fa7c58' }}>Failed to read the image. Try a clearer photo.</p>
+                            <p style={{ color: 'var(--accent-red)', fontSize: 13, margin: 0 }}>Could not read the image. Try a clearer photo.</p>
                         )}
-                        <button onClick={reset} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm"
-                            style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                            <X size={14} /> Scan Another
+                        <button onClick={reset} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 99, fontSize: 13, border: '1px solid var(--glass-border)', background: 'var(--glass)', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                            <X size={13} /> Scan Another
                         </button>
                     </div>
                 )}
-            </div>
+            </motion.div>
 
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+            <input ref={fileRef} type="file" accept="image/*" onChange={e => processFile(e.target.files?.[0])} style={{ display: 'none' }} />
 
             {/* Tips */}
-            <div className="rounded-2xl p-5 space-y-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                <div className="flex items-center gap-2">
-                    <FileText size={16} style={{ color: 'var(--accent-primary)' }} />
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Tips for better results</span>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+                className="glass-card" style={{ borderRadius: 20, padding: '18px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <ZapIcon size={15} color="var(--accent)" />
+                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>Tips for best results</span>
                 </div>
-                <ul className="text-xs space-y-1.5 list-disc list-inside" style={{ color: 'var(--text-secondary)' }}>
-                    <li>Use well-lit, clear photos with minimal shadows</li>
-                    <li>Ensure the total amount and date are clearly visible</li>
-                    <li>Printed receipts work better than handwritten bills</li>
-                    <li>OCR runs 100% offline using Tesseract.js — no internet needed</li>
+                <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[
+                        'Use well-lit, flat photos with minimal shadows',
+                        'Ensure the total amount and date are clearly visible',
+                        'Printed receipts work better than handwritten bills',
+                        'OCR runs 100% offline — no internet required',
+                    ].map(t => (
+                        <li key={t} style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{t}</li>
+                    ))}
                 </ul>
-            </div>
+            </motion.div>
 
-            {modal && (
-                <ConfirmModal
-                    imageUrl={modal.imageUrl}
-                    ocrData={modal}
-                    onConfirm={handleConfirm}
-                    onCancel={() => { setModal(null); reset(); }}
-                />
-            )}
+            <AnimatePresence>
+                {modal && (
+                    <ConfirmModal imageUrl={modal.imageUrl} ocrData={modal} onConfirm={handleConfirm} onCancel={() => { setModal(null); reset(); }} />
+                )}
+            </AnimatePresence>
         </div>
     );
 };
