@@ -54,7 +54,7 @@ function App() {
         >
           <style>{`
             @media (max-width: 768px) {
-              main { margin-left: 0 !important; padding: 80px 16px 24px !important; }
+              main { margin-left: 0 !important; padding: 72px 16px 88px !important; }
             }
           `}</style>
           <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
